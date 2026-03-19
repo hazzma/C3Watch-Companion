@@ -1,0 +1,60 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import '../../../../core/constants/app_colors.dart';
+
+class PresetStripWidget extends StatelessWidget {
+  final List<String> presets;
+  final Function(String) onPresetTapped;
+
+  const PresetStripWidget({
+    super.key,
+    required this.presets,
+    required this.onPresetTapped,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (presets.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Recent Presets",
+          style: TextStyle(
+            color: AppColors.textSecond, 
+            fontSize: 13, 
+            fontWeight: FontWeight.w600
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 60,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: presets.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final path = presets[index];
+              return GestureDetector(
+                onTap: () => onPresetTapped(path),
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.bgElevated, width: 2),
+                    image: DecorationImage(
+                      image: FileImage(File(path)),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
