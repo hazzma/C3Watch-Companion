@@ -8,16 +8,20 @@ class BleService {
 
   // APP-001: Scan only from ConnectScreen
   Future<void> startScan() async {
-    // APP-003: 10s timeout, filter by 'ESP32Watch'
+    // Check if Bluetooth is ON first
+    if (await FlutterBluePlus.adapterState.first != BluetoothAdapterState.on) {
+      throw Exception("Bluetooth is turned off. Please enable it.");
+    }
+
+    // APP-003: 10s timeout
     if (FlutterBluePlus.isScanningNow) return;
 
     FlutterBluePlus.scanResults.listen((results) {
-      final filtered = results.where((r) => r.device.advName == BleConstants.deviceName || r.device.platformName == BleConstants.deviceName).toList();
-      _scanResultsController.add(filtered);
+      // Return all results, no filtering in service anymore
+      _scanResultsController.add(results);
     });
 
     await FlutterBluePlus.startScan(
-      withNames: [BleConstants.deviceName],
       timeout: const Duration(seconds: 10), // APP-003
     );
   }

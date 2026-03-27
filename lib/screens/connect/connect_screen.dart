@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/widgets/ble_status_pill.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/ble_provider.dart';
+import '../../core/constants/ble_constants.dart';
 
 class ConnectScreen extends ConsumerStatefulWidget {
   const ConnectScreen({super.key});
@@ -89,9 +90,19 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> with SingleTicker
       return;
     }
     
-    ref.read(bleConnectionStateProvider.notifier).state = BleConnectionState.scanning;
-    final service = ref.read(bleServiceProvider);
-    await service.startScan();
+    try {
+      ref.read(bleConnectionStateProvider.notifier).state = BleConnectionState.scanning;
+      final service = ref.read(bleServiceProvider);
+      await service.startScan();
+    } catch (e) {
+      ref.read(bleConnectionStateProvider.notifier).state = BleConnectionState.disconnected;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceAll("Exception: ", "")), backgroundColor: AppColors.accentRed)
+        );
+      }
+      return;
+    }
     
     // APP-003: Automatically reset state if not connected after timeout
     Future.delayed(const Duration(seconds: 11), () {
@@ -234,9 +245,23 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> with SingleTicker
                         if (name.isEmpty) name = result.device.platformName;
                         if (name.isEmpty) name = "Unknown Device";
                         
+                        final bool isSmartwatch = name == BleConstants.deviceName;
+                        
                         return ListTile(
-                          leading: const Icon(Icons.bluetooth, color: AppColors.accentPurple),
-                          title: Text(name, style: const TextStyle(color: AppColors.textPrimary)),
+                          leading: Icon(
+                            isSmartwatch ? Icons.watch : Icons.bluetooth, 
+                            color: isSmartwatch ? AppColors.accentTeal : AppColors.accentPurple,
+                          ),
+                          title: Row(
+                            children: [
+                              Text(name, style: const TextStyle(color: AppColors.textPrimary)),
+                              if (isSmartwatch) ...[
+                                const SizedBox(width: 8),
+                                const Icon(Icons.arrow_back, color: AppColors.accentTeal, size: 16),
+                                const Text(" It's me!", style: TextStyle(color: AppColors.accentTeal, fontSize: 12, fontWeight: FontWeight.bold)),
+                              ],
+                            ],
+                          ),
                           subtitle: Text(result.device.remoteId.str, style: const TextStyle(color: AppColors.textSecond, fontSize: 12)),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -246,7 +271,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> with SingleTicker
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.bgSurface,
-                                  foregroundColor: AppColors.accentTeal,
+                                  foregroundColor: isSmartwatch ? AppColors.accentTeal : AppColors.textSecond,
                                 ),
                                 onPressed: () => _connect(result.device),
                                 child: const Text("Connect"),
