@@ -21,56 +21,83 @@ class PresetStripWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          "Recent Presets",
-          style: TextStyle(
-            color: AppColors.textSecond, 
-            fontSize: 13, 
-            fontWeight: FontWeight.w600
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              "Recent Presets",
+              style: TextStyle(
+                color: AppColors.textSecond, 
+                fontSize: 13, 
+                fontWeight: FontWeight.w600
+              ),
+            ),
+            if (presets.length > 3)
+              const Text(
+                "Scroll right →",
+                style: TextStyle(color: AppColors.textHint, fontSize: 10),
+              ),
+          ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         SizedBox(
-          height: 60,
+          height: 80,
           child: ListView.separated(
             padding: const EdgeInsets.only(right: 20),
             scrollDirection: Axis.horizontal,
             itemCount: presets.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
             itemBuilder: (context, index) {
               final path = presets[index];
               return Stack(
+                clipBehavior: Clip.none,
                 children: [
                   GestureDetector(
                     onTap: () => onPresetTapped(path),
-                    child: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.bgElevated, width: 2),
-                        image: DecorationImage(
-                          image: FileImage(File(path)),
-                          fit: BoxFit.cover,
+                    child: Hero(
+                      tag: 'preset_$path',
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.bgElevated, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(50),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            )
+                          ],
+                          image: DecorationImage(
+                            image: FileImage(File(path)),
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                     ),
                   ),
                   Positioned(
-                    top: -2,
-                    right: -2,
+                    top: -5,
+                    right: -5,
                     child: GestureDetector(
                       onTap: () => onPresetDeleted(path),
                       child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
                           color: AppColors.bgSurface,
                           shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(80),
+                              blurRadius: 4,
+                            )
+                          ],
                         ),
                         child: const Icon(
-                          Icons.cancel,
+                          Icons.close,
                           color: AppColors.accentRed,
-                          size: 18,
+                          size: 14,
                         ),
                       ),
                     ),

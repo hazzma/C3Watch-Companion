@@ -145,10 +145,18 @@ class WallpaperService {
       return;
     }
 
-    Future<bool> waitForAck(Stream<List<int>> stream, int expectedAck, {int timeoutSec = 10}) async {
+    Future<bool> waitForAck(Stream<List<int>> stream, int expectedType, {int? expectedIndex, int timeoutSec = 10}) async {
       try {
-        final res = await stream.firstWhere((d) => d.isNotEmpty && (d[0] == expectedAck || d[0] == 0x15 || d[0] == 0x02)).timeout(Duration(seconds: timeoutSec));
-        return res[0] == expectedAck;
+        final res = await stream.firstWhere((d) {
+          if (d.isEmpty) return false;
+          if (expectedIndex != null) {
+            // ACK 0x06 [Type, IndexL, IndexH]
+            return d.length >= 3 && d[0] == 0x06 && (d[1] | (d[2] << 8)) == expectedIndex;
+          }
+          return d[0] == expectedType || d[0] == 0x15 || d[0] == 0x02;
+        }).timeout(Duration(seconds: timeoutSec));
+        
+        return expectedIndex != null ? true : res[0] == expectedType;
       } catch (e) {
         return false;
       }
@@ -170,8 +178,8 @@ class WallpaperService {
         
         payload[0] = i & 0xFF;
         payload[1] = (i >> 8) & 0xFF;
-        payload[2] = totalChunks & 0xFF;
-        payload[3] = (totalChunks >> 8) & 0xFF;
+        payload[2] = 0x00; // Reserved per v6.4.4
+        payload[3] = 0x00; // Reserved per v6.4.4
         payload[4] = len & 0xFF;
         payload[5] = (len >> 8) & 0xFF;
         payload.setRange(6, 6 + len, chunkData);
@@ -179,7 +187,7 @@ class WallpaperService {
         bool chunkSuccess = false;
         for (int retry = 0; retry < 3; retry++) {
           await bleService.writeCharacteristic(BleConstants.charWallpaperUuid, payload);
-          bool ack = await waitForAck(wallpaperStream, 0x06); // 0x06 is ACK
+          bool ack = await waitForAck(wallpaperStream, 0x06, expectedIndex: i); 
           if (ack) {
             chunkSuccess = true;
             break;

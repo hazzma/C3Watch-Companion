@@ -6,6 +6,8 @@ import '../../core/widgets/ble_status_pill.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/watch_data_provider.dart';
 import '../../providers/ble_provider.dart';
+import '../../core/constants/ble_constants.dart';
+import 'dart:ui';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -134,7 +136,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: isConnected ? () async {
           await ref.read(timeSyncProvider).syncTime();
-          await ref.read(watchDataProvider.notifier).requestAllData();
+          // Request non-intrusive data only to avoid watch HR monitoring mode
+          final notifier = ref.read(watchDataProvider.notifier);
+          await notifier.requestSteps();
+          await Future.delayed(const Duration(milliseconds: 200));
+          await ref.read(bleServiceProvider).sendCommand(BleConstants.cmdRequestBattery);
+          
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Syncing...'), backgroundColor: AppColors.accentTeal));
           }

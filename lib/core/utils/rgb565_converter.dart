@@ -94,15 +94,15 @@ class Rgb565Converter {
         int g = gNum.clamp(0, 255).toInt();
         int b = bNum.clamp(0, 255).toInt();
 
-        // Convert to RGB565
+        // Convert to RGB565 (16-bit)
         final r5 = (r >> 3) & 0x1F;
         final g6 = (g >> 2) & 0x3F;
         final b5 = (b >> 3) & 0x1F;
         final rgb565 = (r5 << 11) | (g6 << 5) | b5;
 
-        // Little-endian
-        rgb565Data[offset++] = rgb565 & 0xFF;
+        // Big-endian for ST7789 driver
         rgb565Data[offset++] = (rgb565 >> 8) & 0xFF;
+        rgb565Data[offset++] = rgb565 & 0xFF;
 
         // Decode back to RGB for preview exact match
         final previewR = ((rgb565 >> 11) & 0x1F) * 255 ~/ 31;
