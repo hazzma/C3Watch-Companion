@@ -163,6 +163,23 @@ class WallpaperNotifier extends StateNotifier<WallpaperState> {
       }
     }
   }
+
+  Future<void> deletePreset(String path) async {
+    await WallpaperService.removePreset(path);
+    final newPresets = await WallpaperService.getSavedPresets();
+    
+    // If the deleted preset is currently selected, clear the preview
+    if (state.originalImage?.path == path) {
+      state = state.copyWith(
+        originalImage: null,
+        convertedRgb565: null,
+        previewPng: null,
+        presets: newPresets,
+      );
+    } else {
+      state = state.copyWith(presets: newPresets);
+    }
+  }
 }
 
 final wallpaperProvider = StateNotifierProvider<WallpaperNotifier, WallpaperState>((ref) {

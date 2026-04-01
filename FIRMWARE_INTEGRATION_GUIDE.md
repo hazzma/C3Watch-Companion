@@ -1,6 +1,6 @@
 # Firmware Integration Guide: C3Watch Companion App
 
-This document provides the exact technical specifications for a firmware agent (e.g., ESP32-C3/S3 developer) to integrate with this Flutter application.
+This document provides the exact technical specifications for a firmware agent (e.g., ESP32-C3 developer) to integrate with this Flutter application.
 
 ## 1. Device Identification
 The app filters for devices strictly by their **Advertised Name**.
@@ -68,10 +68,12 @@ Watch must send **Notifications** on these characteristics when requested or per
 
 ### 3.4. Control Commands (Requesting States)
 The app will send 1-byte commands to `Control` characteristic `...9006`:
-- `0x03`: Request HR/SpO2 Reading
-- `0x04`: Request Step Count
+- `0x03`: Start HR/SpO2 Monitoring (Watch should start notifying `...9003` continuously)
+- `0x04`: Request Step Count (Single notify `...004` or intermittent)
 - `0x05`: Request Battery Status
 - `0x07`: Reboot Order (Watch should restart immediately)
+- `0x08`: Stop HR/SpO2 Monitoring (Stop sending notifications to `...9003`)
+- `0x09`: Stop Step Counting Monitoring (if implemented as stream)
 
 ---
 

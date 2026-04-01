@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:intl/intl.dart';
 import '../../core/widgets/ble_status_pill.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/watch_data_provider.dart';
@@ -32,7 +34,7 @@ class _DataScreenState extends ConsumerState<DataScreen> with SingleTickerProvid
     if (ref.read(bleConnectionStateProvider) != BleConnectionState.connected) return;
     
     if (_tabController.index == 0) {
-      await ref.read(watchDataProvider.notifier).requestHr();
+      await ref.read(watchDataProvider.notifier).startHrMonitoring();
     } else {
       await ref.read(watchDataProvider.notifier).requestSteps();
     }
@@ -40,7 +42,7 @@ class _DataScreenState extends ConsumerState<DataScreen> with SingleTickerProvid
 
   String _fmtTime(DateTime? t) {
     if (t == null) return "Never";
-    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    return DateFormat('HH:mm:ss').format(t);
   }
 
   @override
@@ -71,77 +73,119 @@ class _DataScreenState extends ConsumerState<DataScreen> with SingleTickerProvid
             onRefresh: _handleRefresh,
             color: AppColors.accentPurple,
             child: ListView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(20),
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
-                const SizedBox(height: 20),
-                Center(
-                  child: Container(
-                    height: 100,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: AppColors.bgSurface,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.accentRed.withAlpha(50), width: 2),
-                    ),
-                    child: Center(
-                      child: isConnected 
-                        ? Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: List.generate(5, (i) => 
-                              Container(
-                                width: 4,
-                                height: 40,
-                                margin: const EdgeInsets.symmetric(horizontal: 4),
-                                decoration: BoxDecoration(color: AppColors.accentRed, borderRadius: BorderRadius.circular(2)),
-                              ).animate(onPlay: (c) => c.repeat(reverse: true)).scaleY(begin: 0.2, end: 1.5, duration: (300 + i*100).ms, curve: Curves.easeInOut)
-                            ),
-                          )
-                        : const Icon(Icons.monitor_heart, color: AppColors.textHint, size: 48),
+                // Real-time Chart
+                Container(
+                  height: 200,
+                  padding: const EdgeInsets.fromLTRB(10, 20, 20, 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.bgSurface,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: LineChart(
+                    LineChartData(
+                      gridData: const FlGridData(show: false),
+                      titlesData: const FlTitlesData(show: false),
+                      borderData: FlBorderData(show: false),
+                      minY: 40,
+                      maxY: 180,
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: watchData.hrLogs.asMap().entries.map((e) {
+                            return FlSpot(e.key.toDouble(), e.value.bpm.toDouble());
+                          }).toList(),
+                          isCurved: true,
+                          color: AppColors.accentRed,
+                          barWidth: 3,
+                          isStrokeCapRound: true,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: AppColors.accentRed.withAlpha(30),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 40),
-                Text(watchData.hrBpm != null ? '${watchData.hrBpm}' : '—', style: const TextStyle(fontSize: 96, fontWeight: FontWeight.bold, color: AppColors.textPrimary), textAlign: TextAlign.center),
-                const Text("BPM", style: TextStyle(color: AppColors.accentRed, fontSize: 24, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
-                const SizedBox(height: 20),
+                ).animate().fadeIn().slideY(begin: 0.1),
                 
+                const SizedBox(height: 24),
+                
+                // Big Display
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    const Icon(Icons.water_drop, color: AppColors.accentTeal, size: 20),
-                    const SizedBox(width: 8),
-                    Text(watchData.hrSpo2 != null ? 'SpO2: ${watchData.hrSpo2}%' : 'SpO2: —', style: const TextStyle(color: AppColors.textSecond, fontSize: 18)),
+                    _buildStatBox("BPM", watchData.hrBpm?.toString() ?? "—", AppColors.accentRed),
+                    _buildStatBox("SpO2", watchData.hrSpo2 != null ? "${watchData.hrSpo2}%" : "—", AppColors.accentTeal),
+                    _buildStatBox("AVG", watchData.avgBpm.toStringAsFixed(0), AppColors.accentPurple),
                   ],
                 ),
                 
-                const SizedBox(height: 40),
-                Center(child: Text(watchData.hrTimestamp != null ? 'Last known: ${_fmtTime(watchData.hrTimestamp)}' : 'No data recorded', style: const TextStyle(color: AppColors.textHint))),
+                const SizedBox(height: 30),
+                
+                // Controls
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: isConnected 
+                          ? (watchData.isHrMonitoring 
+                              ? () => ref.read(watchDataProvider.notifier).stopHrMonitoring() 
+                              : () => ref.read(watchDataProvider.notifier).startHrMonitoring()) 
+                          : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: watchData.isHrMonitoring ? AppColors.accentAmber : AppColors.accentRed,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: Icon(watchData.isHrMonitoring ? Icons.stop : Icons.play_arrow),
+                        label: Text(watchData.isHrMonitoring ? "Stop Monitoring" : "Start Monitoring"),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    IconButton.filledTonal(
+                      onPressed: watchData.hrLogs.isNotEmpty ? () => ref.read(watchDataProvider.notifier).clearHrLogs() : null,
+                      icon: const Icon(Icons.delete_sweep),
+                      style: IconButton.styleFrom(backgroundColor: AppColors.bgSurface, foregroundColor: AppColors.textSecond),
+                    ),
+                  ],
+                ),
                 
                 const SizedBox(height: 30),
-                ElevatedButton.icon(
-                  onPressed: isConnected ? () async {
-                    await ref.read(watchDataProvider.notifier).requestHr();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reading requested...'), backgroundColor: AppColors.accentRed));
-                    }
-                  } : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.accentRed,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: AppColors.bgElevated,
-                    disabledForegroundColor: AppColors.textHint,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  icon: const Icon(Icons.favorite),
-                  label: const Text("Take Reading"),
-                ),
+                
+                // Logs
+                const Text("Activity History", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 12),
+                if (watchData.hrLogs.isEmpty)
+                   const Center(child: Padding(
+                     padding: EdgeInsets.all(40),
+                     child: Text("No data yet", style: TextStyle(color: AppColors.textHint)),
+                   ))
+                else
+                  ...watchData.hrLogs.reversed.take(10).map((log) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.bgSurface,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(_fmtTime(log.time), style: const TextStyle(color: AppColors.textHint, fontSize: 12)),
+                        Text("${log.bpm} BPM", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        Text("${log.spo2}% SpO2", style: const TextStyle(color: AppColors.accentTeal, fontSize: 13)),
+                      ],
+                    ),
+                  )).toList(),
               ],
             ),
           ),
           
-          // Steps Tab
+          // Steps Tab (Simplified)
           RefreshIndicator(
             onRefresh: _handleRefresh,
             color: AppColors.accentPurple,
@@ -185,33 +229,35 @@ class _DataScreenState extends ConsumerState<DataScreen> with SingleTickerProvid
                   ],
                 ),
                 
-                const SizedBox(height: 40),
-                Center(child: Text(watchData.stepsTimestamp != null ? 'Last known: ${_fmtTime(watchData.stepsTimestamp)}' : 'No data recorded', style: const TextStyle(color: AppColors.textHint))),
-                
-                const SizedBox(height: 30),
+                const SizedBox(height: 60),
                 ElevatedButton.icon(
                   onPressed: isConnected ? () async {
                     await ref.read(watchDataProvider.notifier).requestSteps();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Refreshing steps...'), backgroundColor: AppColors.accentTeal));
-                    }
                   } : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accentTeal,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: AppColors.bgElevated,
-                    disabledForegroundColor: AppColors.textHint,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   icon: const Icon(Icons.refresh),
-                  label: const Text("Refresh"),
+                  label: const Text("Refresh Steps"),
                 ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatBox(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(color: AppColors.textHint, fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(color: color, fontSize: 24, fontWeight: FontWeight.bold)),
+      ],
     );
   }
 

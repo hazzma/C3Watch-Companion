@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/ble_constants.dart';
@@ -7,10 +8,31 @@ import 'ble_provider.dart';
 
 final lastSyncTimeProvider = StateProvider<DateTime?>((ref) => null);
 
+class HrLog {
+  final DateTime time;
+  final int bpm;
+  final int spo2;
+  HrLog({required this.time, required this.bpm, required this.spo2});
+
+  Map<String, dynamic> toJson() => {
+    'time': time.toIso8601String(),
+    'bpm': bpm,
+    'spo2': spo2,
+  };
+
+  factory HrLog.fromJson(Map<String, dynamic> json) => HrLog(
+    time: DateTime.parse(json['time']),
+    bpm: json['bpm'],
+    spo2: json['spo2'],
+  );
+}
+
 class WatchDataState {
   final int? hrBpm;
   final int? hrSpo2;
   final DateTime? hrTimestamp;
+  final List<HrLog> hrLogs;
+  final bool isHrMonitoring;
   
   final int? steps;
   final DateTime? stepsTimestamp;
@@ -21,12 +43,21 @@ class WatchDataState {
 
   WatchDataState({
     this.hrBpm, this.hrSpo2, this.hrTimestamp,
+    this.hrLogs = const [],
+    this.isHrMonitoring = false,
     this.steps, this.stepsTimestamp,
     this.batteryPercent, this.batteryIsCharging, this.batteryTimestamp,
   });
 
+  double get avgBpm {
+    if (hrLogs.isEmpty) return 0;
+    return hrLogs.map((l) => l.bpm).reduce((a, b) => a + b) / hrLogs.length;
+  }
+
   WatchDataState copyWith({
     int? hrBpm, int? hrSpo2, DateTime? hrTimestamp,
+    List<HrLog>? hrLogs,
+    bool? isHrMonitoring,
     int? steps, DateTime? stepsTimestamp,
     int? batteryPercent, bool? batteryIsCharging, DateTime? batteryTimestamp,
   }) {
@@ -34,6 +65,8 @@ class WatchDataState {
       hrBpm: hrBpm ?? this.hrBpm,
       hrSpo2: hrSpo2 ?? this.hrSpo2,
       hrTimestamp: hrTimestamp ?? this.hrTimestamp,
+      hrLogs: hrLogs ?? this.hrLogs,
+      isHrMonitoring: isHrMonitoring ?? this.isHrMonitoring,
       steps: steps ?? this.steps,
       stepsTimestamp: stepsTimestamp ?? this.stepsTimestamp,
       batteryPercent: batteryPercent ?? this.batteryPercent,
@@ -61,6 +94,9 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
     int? hrSpo2 = prefs.getInt('hr_spo2');
     String? hrTime = prefs.getString('hr_time');
     
+    final logsJson = prefs.getStringList('hr_logs') ?? [];
+    final logs = logsJson.map((l) => HrLog.fromJson(jsonDecode(l))).toList();
+    
     int? steps = prefs.getInt('steps');
     String? stepsTime = prefs.getString('steps_time');
     
@@ -70,6 +106,7 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
 
     state = state.copyWith(
       hrBpm: hrBpm, hrSpo2: hrSpo2, hrTimestamp: hrTime != null ? DateTime.parse(hrTime) : null,
+      hrLogs: logs,
       steps: steps, stepsTimestamp: stepsTime != null ? DateTime.parse(stepsTime) : null,
       batteryPercent: battPct, batteryIsCharging: battChg, batteryTimestamp: battTime != null ? DateTime.parse(battTime) : null,
     );
@@ -81,6 +118,7 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
         _subscribeToData();
       } else if (next == BleConnectionState.disconnected) {
         _cancelSubscriptions();
+        state = state.copyWith(isHrMonitoring: false);
       }
     });
   }
@@ -95,12 +133,17 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
         final spo2 = data[1];
         final now = DateTime.now();
         
-        state = state.copyWith(hrBpm: bpm, hrSpo2: spo2, hrTimestamp: now);
+        final newLog = HrLog(time: now, bpm: bpm, spo2: spo2);
+        final updatedLogs = [...state.hrLogs, newLog];
+        if (updatedLogs.length > 50) updatedLogs.removeAt(0); // Keep last 50 for graph
+
+        state = state.copyWith(hrBpm: bpm, hrSpo2: spo2, hrTimestamp: now, hrLogs: updatedLogs);
         
         final prefs = await SharedPreferences.getInstance();
         prefs.setInt('hr_bpm', bpm);
         prefs.setInt('hr_spo2', spo2);
         prefs.setString('hr_time', now.toIso8601String());
+        prefs.setStringList('hr_logs', updatedLogs.map((l) => jsonEncode(l.toJson())).toList());
       }
     });
 
@@ -150,8 +193,20 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
     await service.sendCommand(BleConstants.cmdRequestBattery);
   }
 
-  Future<void> requestHr() async {
+  Future<void> startHrMonitoring() async {
     await ref.read(bleServiceProvider).sendCommand(BleConstants.cmdRequestHr);
+    state = state.copyWith(isHrMonitoring: true);
+  }
+
+  Future<void> stopHrMonitoring() async {
+    await ref.read(bleServiceProvider).sendCommand(BleConstants.cmdStopHr);
+    state = state.copyWith(isHrMonitoring: false);
+  }
+
+  Future<void> clearHrLogs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('hr_logs');
+    state = state.copyWith(hrLogs: []);
   }
 
   Future<void> requestSteps() async {

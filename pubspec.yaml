@@ -29,7 +29,9 @@ dependencies:
 
   # UI
   google_fonts: ^6.2.1
-  flutter_animate: ^4.5.0     # animasi mudah & ringan
+  flutter_animate: ^4.5.2     # animasi mudah & ringan
+  fl_chart: ^1.2.0
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:

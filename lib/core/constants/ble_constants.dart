@@ -21,4 +21,6 @@ class BleConstants {
   static const int cmdRequestBattery = 0x05;
   static const int cmdSyncTime = 0x06;
   static const int cmdRebootWatch = 0x07;
+  static const int cmdStopHr = 0x08;
+  static const int cmdStopSteps = 0x09;
 }

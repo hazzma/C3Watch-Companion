@@ -114,6 +114,7 @@ class WallpaperScreen extends ConsumerWidget {
                       PresetStripWidget(
                         presets: state.presets,
                         onPresetTapped: notifier.loadPreset,
+                        onPresetDeleted: notifier.deletePreset,
                       ),
                       const SizedBox(height: 20),
                     ],

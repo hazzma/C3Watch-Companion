@@ -75,13 +75,25 @@ class WallpaperService {
     List<String> presets = prefs.getStringList(_presetsKey) ?? [];
     
     // Max 5 presets
-    if (presets.contains(imagePath)) return;
+    if (presets.contains(imagePath)) {
+      // Move to front
+      presets.remove(imagePath);
+    }
     
     presets.insert(0, imagePath);
     if (presets.length > 5) {
       presets = presets.sublist(0, 5);
     }
     await prefs.setStringList(_presetsKey, presets);
+  }
+
+  static Future<void> removePreset(String imagePath) async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> presets = prefs.getStringList(_presetsKey) ?? [];
+    if (presets.contains(imagePath)) {
+      presets.remove(imagePath);
+      await prefs.setStringList(_presetsKey, presets);
+    }
   }
 
   static Future<void> clearPresets() async {
