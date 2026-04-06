@@ -94,9 +94,7 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
     int? hrSpo2 = prefs.getInt('hr_spo2');
     String? hrTime = prefs.getString('hr_time');
     
-    final logsJson = prefs.getStringList('hr_logs') ?? [];
-    final logs = logsJson.map((l) => HrLog.fromJson(jsonDecode(l))).toList();
-    
+    // UI session (temp only for current chart)
     int? steps = prefs.getInt('steps');
     String? stepsTime = prefs.getString('steps_time');
     
@@ -106,7 +104,6 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
 
     state = state.copyWith(
       hrBpm: hrBpm, hrSpo2: hrSpo2, hrTimestamp: hrTime != null ? DateTime.parse(hrTime) : null,
-      hrLogs: logs,
       steps: steps, stepsTimestamp: stepsTime != null ? DateTime.parse(stepsTime) : null,
       batteryPercent: battPct, batteryIsCharging: battChg, batteryTimestamp: battTime != null ? DateTime.parse(battTime) : null,
     );
@@ -117,6 +114,9 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
       if (next == BleConnectionState.connected && prev != BleConnectionState.connected) {
         _subscribeToData();
       } else if (next == BleConnectionState.disconnected) {
+        if (state.isHrMonitoring) {
+          _saveCurrentSessionToHistory();
+        }
         _cancelSubscriptions();
         state = state.copyWith(isHrMonitoring: false);
       }
@@ -135,7 +135,7 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
         
         final newLog = HrLog(time: now, bpm: bpm, spo2: spo2);
         final updatedLogs = [...state.hrLogs, newLog];
-        if (updatedLogs.length > 50) updatedLogs.removeAt(0); // Keep last 50 for graph
+        if (updatedLogs.length > 300) updatedLogs.removeAt(0); // Max 300 points per session (roughly 5 mins at 1Hz)
 
         state = state.copyWith(hrBpm: bpm, hrSpo2: spo2, hrTimestamp: now, hrLogs: updatedLogs);
         
@@ -143,7 +143,6 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
         prefs.setInt('hr_bpm', bpm);
         prefs.setInt('hr_spo2', spo2);
         prefs.setString('hr_time', now.toIso8601String());
-        prefs.setStringList('hr_logs', updatedLogs.map((l) => jsonEncode(l.toJson())).toList());
       }
     });
 
@@ -152,9 +151,7 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
       if (data.length >= 4) {
         final steps = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
         final now = DateTime.now();
-        
         state = state.copyWith(steps: steps, stepsTimestamp: now);
-        
         final prefs = await SharedPreferences.getInstance();
         prefs.setInt('steps', steps);
         prefs.setString('steps_time', now.toIso8601String());
@@ -167,9 +164,7 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
         final pct = data[0];
         final isChg = data[1] == 1;
         final now = DateTime.now();
-        
         state = state.copyWith(batteryPercent: pct, batteryIsCharging: isChg, batteryTimestamp: now);
-        
         final prefs = await SharedPreferences.getInstance();
         prefs.setInt('batt_pct', pct);
         prefs.setBool('batt_chg', isChg);
@@ -184,28 +179,33 @@ class WatchDataNotifier extends StateNotifier<WatchDataState> {
     _battSub?.cancel();
   }
 
-  Future<void> requestAllData() async {
-    final service = ref.read(bleServiceProvider);
-    await service.sendCommand(BleConstants.cmdRequestHr);
-    await Future.delayed(const Duration(milliseconds: 200));
-    await service.sendCommand(BleConstants.cmdRequestSteps);
-    await Future.delayed(const Duration(milliseconds: 200));
-    await service.sendCommand(BleConstants.cmdRequestBattery);
-  }
-
   Future<void> startHrMonitoring() async {
+    state = state.copyWith(isHrMonitoring: true, hrLogs: []); 
     await ref.read(bleServiceProvider).sendCommand(BleConstants.cmdRequestHr);
-    state = state.copyWith(isHrMonitoring: true);
   }
 
   Future<void> stopHrMonitoring() async {
     await ref.read(bleServiceProvider).sendCommand(BleConstants.cmdStopHr);
+    _saveCurrentSessionToHistory();
     state = state.copyWith(isHrMonitoring: false);
   }
 
-  Future<void> clearHrLogs() async {
+  Future<void> _saveCurrentSessionToHistory() async {
+    if (state.hrLogs.length < 5) return; // Don't save tiny/invalid sessions
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('hr_logs');
+    final List<String> history = prefs.getStringList('hr_history_v2') ?? [];
+    
+    final sessionJson = jsonEncode(state.hrLogs.map((l) => l.toJson()).toList());
+    history.add(sessionJson);
+    
+    // Limit to last 20 sessions to save space
+    if (history.length > 20) history.removeAt(0);
+    
+    await prefs.setStringList('hr_history_v2', history);
+  }
+
+  Future<void> clearHrLogs() async {
     state = state.copyWith(hrLogs: []);
   }
 
@@ -224,7 +224,6 @@ final watchDataProvider = StateNotifierProvider<WatchDataNotifier, WatchDataStat
   return WatchDataNotifier(ref);
 });
 
-// Time Sync Logic from Step 4
 class TimeSyncNotifier {
   final Ref ref;
   TimeSyncNotifier(this.ref);
@@ -232,20 +231,12 @@ class TimeSyncNotifier {
   Future<bool> syncTime() async {
     final service = ref.read(bleServiceProvider);
     final packet = TimeSyncUtil.buildPacket(DateTime.now());
-
-    bool success = await service.writeCharacteristic(
-      BleConstants.charTimeSyncUuid,
-      packet,
-    );
-    
+    bool success = await service.writeCharacteristic(BleConstants.charTimeSyncUuid, packet);
     if (success) {
       ref.read(lastSyncTimeProvider.notifier).state = DateTime.now();
     }
-    
     return success;
   }
 }
 
-final timeSyncProvider = Provider<TimeSyncNotifier>((ref) {
-  return TimeSyncNotifier(ref);
-});
+final timeSyncProvider = Provider<TimeSyncNotifier>((ref) => TimeSyncNotifier(ref));

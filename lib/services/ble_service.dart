@@ -9,8 +9,9 @@ class BleService {
   // APP-001: Scan only from ConnectScreen
   Future<void> startScan() async {
     // Check if Bluetooth is ON first
-    if (await FlutterBluePlus.adapterState.first != BluetoothAdapterState.on) {
-      throw Exception("Bluetooth is turned off. Please enable it.");
+    final state = await FlutterBluePlus.adapterState.first;
+    if (state != BluetoothAdapterState.on) {
+      throw Exception("Bluetooth is off. Please enable it.");
     }
 
     // APP-003: 10s timeout
@@ -54,6 +55,9 @@ class BleService {
       _connectedDevice = null;
     }
   }
+
+  String? get connectedDeviceId => _connectedDevice?.remoteId.str;
+  BluetoothDevice? get connectedDevice => _connectedDevice;
 
   // Write Characteristic with UUID
   Future<bool> writeCharacteristic(String uuid, List<int> data) async {

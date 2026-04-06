@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/widgets/ble_status_pill.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/ble_provider.dart';
@@ -117,6 +118,10 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> with SingleTicker
     bool success = await service.connectToDevice(device);
     
     if (success && mounted) {
+      // Save for Auto-Connect
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_device_id', device.remoteId.str);
+      
       ref.read(bleConnectionStateProvider.notifier).state = BleConnectionState.connected;
       // Auto-navigate to Home
       ref.read(bottomNavIndexProvider.notifier).state = 0; 
@@ -130,6 +135,11 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> with SingleTicker
   Future<void> _disconnect() async {
     final service = ref.read(bleServiceProvider);
     await service.disconnect();
+    
+    // Clear last device on manual disconnect
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('last_device_id');
+    
     ref.read(bleConnectionStateProvider.notifier).state = BleConnectionState.disconnected;
   }
 

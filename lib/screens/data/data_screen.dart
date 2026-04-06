@@ -7,6 +7,7 @@ import '../../core/widgets/ble_status_pill.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/watch_data_provider.dart';
 import '../../providers/ble_provider.dart';
+import 'hr_history_screen.dart';
 
 class DataScreen extends ConsumerStatefulWidget {
   const DataScreen({super.key});
@@ -53,7 +54,16 @@ class _DataScreenState extends ConsumerState<DataScreen> with SingleTickerProvid
     return Scaffold(
       appBar: AppBar(
         title: const Text('Watch Data'),
-        actions: const [BleStatusPill()],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const HrHistoryScreen()),
+            ),
+          ),
+          const BleStatusPill(),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppColors.accentPurple,
