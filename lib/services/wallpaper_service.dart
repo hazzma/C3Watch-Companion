@@ -137,20 +137,35 @@ class WallpaperService {
     startCmd[3] = (totalSize >> 16) & 0xFF;
     startCmd[4] = (totalSize >> 24) & 0xFF;
 
-    Stream<List<int>>? controlStream = await bleService.subscribeToCharacteristic(BleConstants.charControlUuid);
-    Stream<List<int>>? wallpaperStream = await bleService.subscribeToCharacteristic(BleConstants.charWallpaperUuid);
+    // Phase 1: Sequential Subscription with Retry logic
+    Stream<List<int>>? controlStream;
+    Stream<List<int>>? wallpaperStream;
+
+    try {
+      // Small delay after MTU request to let ESP32 settle
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      controlStream = await bleService.subscribeToCharacteristic(BleConstants.charControlUuid);
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      wallpaperStream = await bleService.subscribeToCharacteristic(BleConstants.charWallpaperUuid);
+      await Future.delayed(const Duration(milliseconds: 300));
+    } catch (e) {
+       yield WallpaperSendProgress(chunksSent: 0, totalChunks: totalChunks, error: "BLE Error during subscription: $e");
+       return;
+    }
 
     if (controlStream == null || wallpaperStream == null) {
-      yield WallpaperSendProgress(chunksSent: 0, totalChunks: totalChunks, error: "Failed to subscribe to ACK streams.");
+      yield WallpaperSendProgress(chunksSent: 0, totalChunks: totalChunks, error: "Failed to subscribe to ACK streams. Ensure watch is in range.");
       return;
     }
 
     // Phase 0: Boost MTU for faster transfer
     try {
+      // FSD recommends 512 for high-speed streaming
       await bleService.connectedDevice?.requestMtu(512);
-    } catch (_) {
-      // Fallback to default MTU if negotiation fails
-    }
+      await Future.delayed(const Duration(milliseconds: 200));
+    } catch (_) {}
 
     Future<bool> waitForAck(Stream<List<int>> stream, int expectedType, {int? expectedIndex, int timeoutSec = 10}) async {
       try {
