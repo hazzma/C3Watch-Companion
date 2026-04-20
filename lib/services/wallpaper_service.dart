@@ -24,9 +24,9 @@ class WallpaperService {
         sb.write('    ');
       }
       
-      // We stored it little-endian, so high byte is i+1, low byte is i
-      int lowByte = rgbData[i];
-      int highByte = rgbData[i + 1];
+      // Data is stored Big-Endian in v6.4.4: [highByte, lowByte]
+      int highByte = rgbData[i];
+      int lowByte = rgbData[i + 1];
       int word = (highByte << 8) | lowByte;
       
       String hex = '0x${word.toRadixString(16).padLeft(4, '0').toUpperCase()}';
@@ -107,9 +107,9 @@ class WallpaperService {
       crc ^= data[i];
       for (int j = 0; j < 8; j++) {
         if ((crc & 1) != 0) {
-          crc = (crc >> 1) ^ 0xEDB88320;
+          crc = (crc >>> 1) ^ 0xEDB88320;
         } else {
-          crc >>= 1;
+          crc >>>= 1;
         }
       }
     }
@@ -143,6 +143,13 @@ class WallpaperService {
     if (controlStream == null || wallpaperStream == null) {
       yield WallpaperSendProgress(chunksSent: 0, totalChunks: totalChunks, error: "Failed to subscribe to ACK streams.");
       return;
+    }
+
+    // Phase 0: Boost MTU for faster transfer
+    try {
+      await bleService.connectedDevice?.requestMtu(512);
+    } catch (_) {
+      // Fallback to default MTU if negotiation fails
     }
 
     Future<bool> waitForAck(Stream<List<int>> stream, int expectedType, {int? expectedIndex, int timeoutSec = 10}) async {
