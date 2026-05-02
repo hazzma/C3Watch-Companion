@@ -171,14 +171,25 @@ class WallpaperService {
       try {
         final res = await stream.firstWhere((d) {
           if (d.isEmpty) return false;
-          if (expectedIndex != null) {
-            // ACK 0x06 [Type, IndexL, IndexH]
-            return d.length >= 3 && d[0] == 0x06 && (d[1] | (d[2] << 8)) == expectedIndex;
-          }
-          return d[0] == expectedType || d[0] == 0x15 || d[0] == 0x02;
+          // Listen for any known response types to process them
+          return d[0] == 0x01 || d[0] == 0x02 || d[0] == 0x06 || d[0] == 0x15;
         }).timeout(Duration(seconds: timeoutSec));
         
-        return expectedIndex != null ? true : res[0] == expectedType;
+        // Handle failure cases immediately
+        if (res[0] == 0x15 || res[0] == 0x02) return false;
+        
+        if (expectedIndex != null) {
+          // Chunk ACK (0x06)
+          if (res[0] != 0x06) return false;
+          // If watch includes index [0x06, idxL, idxH], verify it
+          if (res.length >= 3) {
+            return (res[1] | (res[2] << 8)) == expectedIndex;
+          }
+          // If watch only sends 0x06, accept it
+          return true;
+        }
+        
+        return res[0] == expectedType;
       } catch (e) {
         return false;
       }
@@ -200,8 +211,8 @@ class WallpaperService {
         
         payload[0] = i & 0xFF;
         payload[1] = (i >> 8) & 0xFF;
-        payload[2] = 0x00; // Reserved per v6.4.4
-        payload[3] = 0x00; // Reserved per v6.4.4
+        payload[2] = totalChunks & 0xFF;
+        payload[3] = (totalChunks >> 8) & 0xFF;
         payload[4] = len & 0xFF;
         payload[5] = (len >> 8) & 0xFF;
         payload.setRange(6, 6 + len, chunkData);
