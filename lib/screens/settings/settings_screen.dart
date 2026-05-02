@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/ble_constants.dart';
 import '../../providers/ble_provider.dart';
 import '../../services/wallpaper_service.dart';
+import 'calibration_screen.dart';
 
 final sharedPrefsProvider = FutureProvider<SharedPreferences>((ref) async {
   return await SharedPreferences.getInstance();
@@ -136,6 +137,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   onTap: () async {
                     await ref.read(bleServiceProvider).disconnect();
                     ref.read(bleConnectionStateProvider.notifier).state = BleConnectionState.disconnected;
+                  },
+                ),
+              ]),
+
+              const SizedBox(height: 24),
+              // CALIBRATION
+              const Text("CALIBRATION", style: TextStyle(color: AppColors.accentPurple, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1.2)),
+              const SizedBox(height: 8),
+              _buildCard([
+                ListTile(
+                  leading: const Icon(Icons.settings_input_component, color: AppColors.accentPurple),
+                  title: const Text("Advanced Calibration", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                  subtitle: Text(isConnected ? "Watch connected" : "Watch not connected (Preview Mode)", style: TextStyle(color: isConnected ? AppColors.accentTeal : AppColors.textSecond, fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right, color: AppColors.textSecond),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const CalibrationScreen()));
                   },
                 ),
               ]),

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const Color bgPrimary    = Color(0xFF0D0D14);
-  static const Color bgSurface    = Color(0xFF16161F);
-  static const Color bgElevated   = Color(0xFF1E1E2A);
+  static const Color bgPrimary    = Color(0xFF000000);
+  static const Color bgSurface    = Color(0xFF0A0A0A);
+  static const Color bgElevated   = Color(0xFF121212);
   static const Color accentPurple = Color(0xFF7F77DD);
   static const Color accentTeal   = Color(0xFF1D9E75);
   static const Color accentAmber  = Color(0xFFEF9F27);

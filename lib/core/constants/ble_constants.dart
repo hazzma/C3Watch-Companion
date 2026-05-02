@@ -9,6 +9,7 @@ class BleConstants {
   static const String charStepsUuid = "12345678-1234-1234-1234-123456789004";
   static const String charBatteryUuid = "12345678-1234-1234-1234-123456789005";
   static const String charControlUuid = "12345678-1234-1234-1234-123456789006";
+  static const String charCalibrationUuid = "12345678-1234-1234-1234-123456789007";
 
   // Device Name
   static const String deviceName = "ESP32Watch";
@@ -23,4 +24,7 @@ class BleConstants {
   static const int cmdRebootWatch = 0x07;
   static const int cmdStopHr = 0x08;
   static const int cmdStopSteps = 0x09;
+  static const int cmdSendCalibration = 0x0A;
+  static const int cmdRequestCalibration = 0x0B;
+  static const int cmdResetCalibration = 0x0C;
 }
